@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Saisie du score</title><link rel="stylesheet" href="style.css">
+<script src="vendor/supabase.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+</head><body><div class="wrap saisie">
+<header class="top"><h1 id="titre">Court</h1><div style="margin-top:6px"><a href="./" style="color:#cfe3d9">Voir tous les courts →</a></div></header>
+<div id="app"><div class="carte">Chargement…</div></div>
+</div>
+<script type="module">
+import { sb, esc, setsGagnes } from "./common.js";
+const q = new URLSearchParams(location.search);
+const num = parseInt(q.get("c"), 10), cle = q.get("k") || "";
+const app = document.getElementById("app");
+let R, court, envoiTimer, enCours = false, aRenvoyer = false, modifLocale = 0;
+
+function msg(t) { app.innerHTML = `<div class="carte">${t}</div>`; }
+
+async function init() {
+  if (!num || !cle) return msg("Lien incomplet. Scannez le QR code affiché sur le court.");
+  const ok = await sb.rpc("verif_cle", { p_num: num, p_cle: cle });
+  if (ok.error) return msg("Pas de réseau ? <button class='btn' onclick='location.reload()'>Réessayer</button>");
+  if (!ok.data) return msg("Ce QR code n'est plus valide. Demandez le bon QR code à l'organisateur.");
+  const [r, c] = await Promise.all([sb.from("rencontre").select("*").eq("id", 1).single(), sb.from("courts").select("*").eq("num", num).single()]);
+  if (r.error || c.error) return msg("Court introuvable. <button class='btn' onclick='location.reload()'>Réessayer</button>");
+  R = r.data; court = c.data;
+  while (court.sets.length < 3) court.sets.push([0, 0]);
+  dessiner();
+  sb.channel("court" + num).on("postgres_changes", { event: "UPDATE", schema: "public", table: "courts", filter: "num=eq." + num }, (p) => {
+    // une autre personne saisit sur ce court : on se met à jour si on n'est pas en train d'écrire
+    if (!enCours && !envoiTimer && Date.now() - modifLocale > 3000) { court = p.new; while (court.sets.length < 3) court.sets.push([0, 0]); dessiner(); }
+  }).subscribe();
+}
+
+function dessiner() {
+  document.title = `Court ${num} · saisie`;
+  document.getElementById("titre").textContent = `Court ${num}${court.libelle ? " · " + court.libelle : ""}`;
+  const fini = court.statut === "termine";
+  app.innerHTML = `
+  <div class="statut ok" id="st">Score enregistré ✓</div>
+  <div class="carte">
+    <div class="entetes"><span class="n"></span><span style="color:var(--club)">${esc(R.club)}</span><span style="color:var(--vis)">${esc(R.visiteurs)}</span></div>
+    ${court.sets.map((s, i) => `<div class="set"><span class="n">${i === 2 ? "Set 3<br><small>ou super TB</small>" : "Set " + (i + 1)}</span>
+      <div class="cpt club"><button data-s="${i}" data-k="0" data-d="-1" aria-label="moins">−</button><span>${s[0]}</span><button data-s="${i}" data-k="0" data-d="1" aria-label="plus">+</button></div>
+      <div class="cpt vis"><button data-s="${i}" data-k="1" data-d="-1" aria-label="moins">−</button><span>${s[1]}</span><button data-s="${i}" data-k="1" data-d="1" aria-label="plus">+</button></div></div>`).join("")}
+  </div>
+  <div class="carte">
+    <label class="l">Joueur(s) ${esc(R.club)} (facultatif)</label><input class="t" id="jc" value="${esc(court.joueur_club)}" placeholder="ex. Martin / Durand">
+    <label class="l">Joueur(s) ${esc(R.visiteurs)} (facultatif)</label><input class="t" id="jv" value="${esc(court.joueur_vis)}" placeholder="ex. Petit">
+  </div>
+  <button class="btn ${fini ? "sec" : ""}" id="fin">${fini ? "Rouvrir le match" : "Match terminé"}</button>`;
+  app.querySelectorAll(".cpt button").forEach((b) => b.addEventListener("click", () => {
+    const s = +b.dataset.s, k = +b.dataset.k, max = s === 2 ? 30 : 7;
+    court.sets[s][k] = Math.min(max, Math.max(0, court.sets[s][k] + +b.dataset.d));
+    b.parentElement.querySelector("span").textContent = court.sets[s][k];
+    if (court.statut === "attente") court.statut = "en_cours";
+    planifier();
+  }));
+  ["jc", "jv"].forEach((id) => document.getElementById(id).addEventListener("input", (e) => {
+    court[id === "jc" ? "joueur_club" : "joueur_vis"] = e.target.value; planifier(800);
+  }));
+  document.getElementById("fin").addEventListener("click", () => {
+    court.statut = court.statut === "termine" ? "en_cours" : "termine"; planifier(0); dessiner(); etat("att", "Enregistrement…");
+  });
+}
+
+function etat(cls, t) { const e = document.getElementById("st"); if (e) { e.className = "statut " + cls; e.textContent = t; } }
+
+function planifier(delai = 350) {
+  modifLocale = Date.now(); etat("att", "Enregistrement…");
+  clearTimeout(envoiTimer); envoiTimer = setTimeout(() => { envoiTimer = null; envoyer(); }, delai);
+}
+
+async function envoyer() {
+  if (enCours) { aRenvoyer = true; return; }
+  enCours = true;
+  const { error } = await sb.rpc("maj_court", { p_num: num, p_cle: cle, p_sets: court.sets, p_joueur_club: court.joueur_club, p_joueur_vis: court.joueur_vis, p_statut: court.statut });
+  enCours = false;
+  if (aRenvoyer) { aRenvoyer = false; return envoyer(); }
+  if (error) { etat("err", "Pas envoyé (réseau). Nouvel essai…"); setTimeout(envoyer, 3000); }
+  else if (!envoiTimer) etat("ok", "Score enregistré ✓");
+}
+window.addEventListener("online", () => envoyer());
+init();
+</script></body></html>

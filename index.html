@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Score en direct</title><link rel="stylesheet" href="style.css">
+<script src="vendor/supabase.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+</head><body><div class="wrap">
+<header class="top"><h1 id="titre">Score en direct</h1>
+<div class="equipes"><span class="pill club" id="nClub">Club</span><span class="total" id="tot">0 – 0</span><span class="pill vis" id="nVis">Visiteurs</span></div>
+</header>
+<div class="grille" id="grille"></div>
+<div class="etat" id="etat">Connexion…</div>
+</div>
+<script type="module">
+import { sb, esc, ilYa, gagnantSet, setsGagnes, gagnantMatch } from "./common.js";
+let R = { titre: "Score en direct", club: "Club", visiteurs: "Visiteurs", nb_courts: 0 }, C = {};
+const $ = (id) => document.getElementById(id);
+
+function rendu() {
+  document.title = R.titre + " · score en direct";
+  $("titre").textContent = R.titre; $("nClub").textContent = R.club; $("nVis").textContent = R.visiteurs;
+  const courts = Object.values(C).filter((c) => c.num <= R.nb_courts).sort((a, b) => a.num - b.num);
+  let tot = [0, 0];
+  $("grille").innerHTML = courts.map((c) => {
+    const gm = gagnantMatch(c); if (c.statut === "termine" && gm >= 0) tot[gm]++;
+    const sets = c.sets.filter((s, i) => i < 2 || s[0] + s[1] > 0);
+    const ligne = (k, cls, nom, joueur) => `<tr><td class="nom"><span class="trait ${cls}"></span>${esc(nom)}${gm === k ? ' <span class="vainq">✓</span>' : ""}${joueur ? `<small>${esc(joueur)}</small>` : ""}</td>${
+      sets.map((s, i) => `<td class="j ${gagnantSet(s[0], s[1], i) === k || (gagnantSet(s[0], s[1], i) < 0 && c.statut === "en_cours") ? "g" : ""}">${s[k]}</td>`).join("")}</tr>`;
+    const lib = { attente: "À venir", en_cours: "En cours", termine: "Terminé" }[c.statut];
+    return `<div class="carte"><div class="tete"><b>Court ${c.num}${c.libelle ? " · " + esc(c.libelle) : ""}</b><span class="badge ${c.statut}">${lib}</span></div>
+      <table class="score">${ligne(0, "club", R.club, c.joueur_club)}${ligne(1, "vis", R.visiteurs, c.joueur_vis)}</table>
+      <div class="maj">${c.statut === "attente" ? "" : "Mis à jour " + ilYa(c.updated_at)}</div></div>`;
+  }).join("");
+  $("tot").textContent = `${tot[0]} – ${tot[1]}`;
+}
+
+async function charger() {
+  const [r, c] = await Promise.all([sb.from("rencontre").select("*").eq("id", 1).single(), sb.from("courts").select("*")]);
+  if (r.error || c.error) { $("etat").textContent = "Connexion difficile, nouvel essai…"; return; }
+  R = r.data; C = {}; c.data.forEach((x) => (C[x.num] = x));
+  rendu(); $("etat").textContent = "En direct · mis à jour automatiquement";
+}
+
+sb.channel("tableau")
+  .on("postgres_changes", { event: "*", schema: "public", table: "courts" }, (p) => { if (p.new?.num) { C[p.new.num] = p.new; rendu(); } })
+  .on("postgres_changes", { event: "*", schema: "public", table: "rencontre" }, (p) => { if (p.new?.id) { R = p.new; rendu(); } })
+  .subscribe((s) => { if (s === "SUBSCRIBED") charger(); });
+
+charger();
+setInterval(charger, 30000);            // filet de sécurité si le temps réel décroche
+setInterval(rendu, 30000);              // rafraîchit les « il y a X min »
+document.addEventListener("visibilitychange", () => { if (!document.hidden) charger(); });
+</script></body></html>

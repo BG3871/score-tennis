@@ -1,0 +1,52 @@
+:root{--bg:#0f3d2e;--panel:#ffffff;--ink:#14201b;--muted:#5d6b65;--club:#1e6fd9;--vis:#d9481e;--line:#dfe6e2;--ok:#1a8f4e;--live:#e0a100}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+a{color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+header.top{color:#fff;text-align:center;padding:8px 0 16px}
+header.top h1{margin:0;font-size:1.5rem}
+.equipes{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:10px;font-weight:700;font-size:1.15rem;flex-wrap:wrap}
+.pill{padding:6px 12px;border-radius:999px;color:#fff}
+.pill.club{background:var(--club)}.pill.vis{background:var(--vis)}
+.total{font-size:2rem;font-variant-numeric:tabular-nums}
+.grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.carte{background:var(--panel);border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.carte .tete{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px}
+.carte .tete b{font-size:1.1rem}
+.badge{font-size:.75rem;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--line);color:var(--muted);white-space:nowrap}
+.badge.en_cours{background:#fff3cc;color:#8a6200}.badge.termine{background:#d9f2e3;color:var(--ok)}
+table.score{width:100%;border-collapse:collapse}
+table.score td{padding:6px 4px;border-top:1px solid var(--line)}
+table.score td.nom{width:100%;font-weight:600;overflow-wrap:anywhere}
+table.score td.nom small{display:block;font-weight:400;color:var(--muted)}
+table.score td.j{min-width:34px;text-align:center;font-size:1.4rem;font-weight:700;font-variant-numeric:tabular-nums;color:#9aa8a2}
+table.score td.j.g{color:var(--ink)}
+.trait{display:inline-block;width:6px;height:22px;border-radius:3px;vertical-align:middle;margin-right:8px}
+.trait.club{background:var(--club)}.trait.vis{background:var(--vis)}
+.maj{font-size:.75rem;color:var(--muted);margin-top:8px;text-align:right}
+.etat{color:#cfe3d9;text-align:center;font-size:.85rem;margin-top:16px}
+.vainq{color:var(--ok)}
+/* saisie */
+.saisie{max-width:520px}
+.saisie .carte{margin-bottom:12px}
+label.l{display:block;font-size:.85rem;color:var(--muted);margin:6px 0 4px}
+input.t{width:100%;font-size:1rem;padding:10px;border:1px solid var(--line);border-radius:10px}
+.set{display:grid;grid-template-columns:auto 1fr 1fr;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.set .n{font-weight:700;color:var(--muted);width:44px;font-size:.85rem}
+.cpt{display:flex;align-items:center;justify-content:space-between;border-radius:12px;padding:4px;color:#fff}
+.cpt.club{background:var(--club)}.cpt.vis{background:var(--vis)}
+.cpt button{width:46px;height:46px;border:0;border-radius:10px;background:rgba(255,255,255,.22);color:#fff;font-size:1.6rem;font-weight:700;touch-action:manipulation}
+.cpt button:active{background:rgba(255,255,255,.45)}
+.cpt span{font-size:1.9rem;font-weight:800;min-width:34px;text-align:center;font-variant-numeric:tabular-nums}
+.entetes{display:grid;grid-template-columns:auto 1fr 1fr;gap:10px;font-weight:700;font-size:.85rem;text-align:center}
+.entetes .n{width:44px}
+.btn{display:block;width:100%;padding:14px;font-size:1.05rem;font-weight:700;border:0;border-radius:12px;background:var(--ok);color:#fff;margin-top:8px}
+.btn.sec{background:var(--line);color:var(--ink)}
+.statut{position:sticky;top:0;z-index:2;text-align:center;font-weight:700;padding:8px;border-radius:10px;margin-bottom:10px;background:#fff}
+.statut.ok{color:var(--ok)}.statut.att{color:#8a6200}.statut.err{background:#fde3dc;color:#a2310f}
+/* admin + qr */
+.qrs{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.qr{background:#fff;border:2px dashed #aaa;border-radius:12px;padding:16px;text-align:center;break-inside:avoid}
+.qr h2{margin:0 0 4px;font-size:2rem}.qr p{margin:4px 0;color:#333}
+.qr img,.qr canvas{width:220px;height:220px}
+@media print{body{background:#fff}.noprint{display:none!important}.wrap{padding:0}.qrs{gap:10mm}.qr{page-break-inside:avoid}}

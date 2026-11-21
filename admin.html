@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Organisateur · QR codes</title><link rel="stylesheet" href="style.css">
+<script src="vendor/supabase.js"></script>
+<meta name="robots" content="noindex">
+<script src="vendor/qrcode.js"></script>
+</head><body><div class="wrap">
+<div class="noprint">
+<header class="top"><h1>Organisateur</h1><div style="margin-top:6px"><a href="./" style="color:#cfe3d9">Tableau public →</a></div></header>
+<div class="carte saisie" style="margin:0 auto 16px" id="form">Chargement…</div>
+</div>
+<div class="qrs" id="qrs"></div>
+</div>
+<script type="module">
+import { sb, esc } from "./common.js";
+const admin = new URLSearchParams(location.search).get("k") || "";
+const F = document.getElementById("form");
+let R, courts = [];
+
+async function init() {
+  if (!admin) { F.textContent = "Lien organisateur incomplet."; return; }
+  const [r, c] = await Promise.all([sb.from("rencontre").select("*").eq("id", 1).single(), sb.from("courts").select("*").order("num")]);
+  R = r.data; courts = c.data || [];
+  form(R.nb_courts);
+  enregistrer(false);
+}
+
+function form(nb) {
+  const lib = (i) => courts.find((c) => c.num === i)?.libelle || "";
+  F.innerHTML = `
+    <label class="l">Titre de la rencontre</label><input class="t" id="titre" value="${esc(R.titre)}">
+    <label class="l">Nom de notre équipe (côté Club)</label><input class="t" id="club" value="${esc(R.club)}">
+    <label class="l">Nom des visiteurs</label><input class="t" id="vis" value="${esc(R.visiteurs)}">
+    <label class="l">Nombre de courts</label><input class="t" id="nb" type="number" min="1" max="30" value="${nb}">
+    <div id="libs">${Array.from({ length: nb }, (_, i) => `<label class="l">Court ${i + 1} · intitulé (facultatif, ex. Simple 1, Double)</label><input class="t lib" value="${esc(lib(i + 1))}">`).join("")}</div>
+    <button class="btn" id="ok">Enregistrer et générer les QR codes</button>
+    <button class="btn sec" id="print">Imprimer les QR codes</button>
+    <button class="btn sec" id="raz">Remettre tous les scores à zéro</button>
+    <p id="msg" style="text-align:center;font-weight:600"></p>`;
+  document.getElementById("nb").addEventListener("change", (e) => { lireForm(); form(Math.max(1, Math.min(30, +e.target.value || 1))); });
+  document.getElementById("ok").onclick = () => enregistrer(true);
+  document.getElementById("print").onclick = () => print();
+  document.getElementById("raz").onclick = async () => {
+    if (!confirm("Remettre tous les scores à zéro ?")) return;
+    const { error } = await sb.rpc("admin_reset", { p_admin: admin });
+    document.getElementById("msg").textContent = error ? "Erreur : " + error.message : "Scores remis à zéro ✓";
+  };
+}
+function lireForm() {
+  R.titre = document.getElementById("titre").value; R.club = document.getElementById("club").value; R.visiteurs = document.getElementById("vis").value;
+  document.querySelectorAll(".lib").forEach((el, i) => { const c = courts.find((x) => x.num === i + 1); if (c) c.libelle = el.value; else courts.push({ num: i + 1, libelle: el.value }); });
+}
+
+async function enregistrer(depuisForm) {
+  let nb = R.nb_courts, libs = courts.filter((c) => c.num <= nb).sort((a, b) => a.num - b.num).map((c) => c.libelle);
+  if (depuisForm) { lireForm(); nb = +document.getElementById("nb").value; libs = [...document.querySelectorAll(".lib")].map((e) => e.value); }
+  const { data, error } = await sb.rpc("admin_config", { p_admin: admin, p_titre: R.titre, p_club: R.club, p_visiteurs: R.visiteurs, p_nb: nb, p_libelles: libs });
+  const m = document.getElementById("msg");
+  if (error) { m.textContent = "Erreur : " + error.message; return; }
+  R.nb_courts = nb;
+  if (depuisForm) m.textContent = "Enregistré ✓";
+  const base = new URL("saisie.html", location.href);
+  document.getElementById("qrs").innerHTML = Array.from({ length: nb }, (_, i) => {
+    const n = i + 1, url = `${base}?c=${n}&k=${data[n]}`;
+    const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+    return `<div class="qr"><h2>Court ${n}</h2><p><b>${esc(libs[i] || "")}</b></p>${qr.createImgTag(6, 8)}
+      <p><b>Scannez pour saisir le score</b><br>${esc(R.club)} contre ${esc(R.visiteurs)}</p>
+      <p style="font-size:.8rem">Score de tous les courts : ${esc(new URL("./", location.href).href)}</p></div>`;
+  }).join("");
+}
+init();
+</script></body></html>
