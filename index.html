@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Score en direct</title><link rel="stylesheet" href="style.css">
+<title>Score en direct</title><link rel="stylesheet" href="style.css?v=2">
 <script src="vendor/supabase.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
 </head><body><div class="wrap">
@@ -12,7 +12,7 @@
 <div class="etat" id="etat">Connexion…</div>
 </div>
 <script type="module">
-import { sb, esc, ilYa, gagnantSet, setsGagnes, gagnantMatch } from "./common.js";
+import { sb, esc, ilYa, gagnantSet, setsGagnes, gagnantMatch } from "./common.js?v=2";
 let R = { titre: "Score en direct", club: "Club", visiteurs: "Visiteurs", nb_courts: 0 }, C = {};
 const $ = (id) => document.getElementById(id);
 let mes = {}, dernier = 0;

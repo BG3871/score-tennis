@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Organisateur · QR codes</title><link rel="stylesheet" href="style.css">
+<title>Organisateur · QR codes</title><link rel="stylesheet" href="style.css?v=2">
 <script src="vendor/supabase.js"></script>
 <meta name="robots" content="noindex">
 <script src="vendor/qrcode.js"></script>
@@ -12,7 +12,7 @@
 <div class="qrs" id="qrs"></div>
 </div>
 <script type="module">
-import { sb, esc } from "./common.js";
+import { sb, esc } from "./common.js?v=2";
 const admin = new URLSearchParams(location.search).get("k") || "";
 const F = document.getElementById("form");
 let R, courts = [];
