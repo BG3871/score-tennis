@@ -7,6 +7,7 @@
 <header class="top"><h1 id="titre">Score en direct</h1>
 <div class="equipes"><span class="pill club" id="nClub">Club</span><span class="total" id="tot">0 – 0</span><span class="pill vis" id="nVis">Visiteurs</span></div>
 </header>
+<a class="retour" id="retour" hidden></a>
 <div class="grille" id="grille"></div>
 <div class="etat" id="etat">Connexion…</div>
 </div>
@@ -14,6 +15,9 @@
 import { sb, esc, ilYa, gagnantSet, setsGagnes, gagnantMatch } from "./common.js";
 let R = { titre: "Score en direct", club: "Club", visiteurs: "Visiteurs", nb_courts: 0 }, C = {};
 const $ = (id) => document.getElementById(id);
+let mes = {}, dernier = 0;
+try { mes = JSON.parse(localStorage.getItem("mesCourts") || "{}"); dernier = +localStorage.getItem("dernierCourt") || 0; } catch (e) {}
+const lienSaisie = (n) => `saisie.html?c=${n}&k=${encodeURIComponent(mes[n])}`;
 
 function rendu() {
   document.title = R.titre + " · score en direct";
@@ -23,14 +27,18 @@ function rendu() {
   $("grille").innerHTML = courts.map((c) => {
     const gm = gagnantMatch(c); if (c.statut === "termine" && gm >= 0) tot[gm]++;
     const sets = c.sets.filter((s, i) => i < 2 || s[0] + s[1] > 0);
-    const ligne = (k, cls, nom, joueur) => `<tr><td class="nom"><span class="trait ${cls}"></span>${esc(nom)}${gm === k ? ' <span class="vainq">✓</span>' : ""}${joueur ? `<small>${esc(joueur)}</small>` : ""}</td>${
+    const srv = (k) => c.service === k && c.statut === "en_cours" ? ' <span class="balle" title="Au service">🎾</span>' : "";
+    const ligne = (k, cls, nom, joueur) => `<tr><td class="nom"><span class="trait ${cls}"></span>${esc(nom)}${srv(k)}${gm === k ? ' <span class="vainq">✓</span>' : ""}${joueur ? `<small>${esc(joueur)}</small>` : ""}</td>${
       sets.map((s, i) => `<td class="j ${gagnantSet(s[0], s[1], i) === k || (gagnantSet(s[0], s[1], i) < 0 && c.statut === "en_cours") ? "g" : ""}">${s[k]}</td>`).join("")}</tr>`;
     const lib = { attente: "À venir", en_cours: "En cours", termine: "Terminé" }[c.statut];
-    return `<div class="carte"><div class="tete"><b>Court ${c.num}${c.libelle ? " · " + esc(c.libelle) : ""}</b><span class="badge ${c.statut}">${lib}</span></div>
+    const mien = !!mes[c.num];
+    return `<${mien ? `a href="${lienSaisie(c.num)}"` : "div"} class="carte${mien ? " mien" : ""}"><div class="tete"><b>Court ${c.num}${c.libelle ? " · " + esc(c.libelle) : ""}</b><span class="badge ${c.statut}">${lib}</span></div>
       <table class="score">${ligne(0, "club", R.club, c.joueur_club)}${ligne(1, "vis", R.visiteurs, c.joueur_vis)}</table>
-      <div class="maj">${c.statut === "attente" ? "" : "Mis à jour " + ilYa(c.updated_at)}</div></div>`;
+      <div class="maj">${mien ? '<span class="saisir">✎ Saisir le score</span>' : ""}${c.statut === "attente" ? "" : "Mis à jour " + ilYa(c.updated_at)}</div></${mien ? "a" : "div"}>`;
   }).join("");
   $("tot").textContent = `${tot[0]} – ${tot[1]}`;
+  const r = $("retour");
+  if (dernier && mes[dernier] && dernier <= R.nb_courts) { r.hidden = false; r.href = lienSaisie(dernier); r.textContent = `← Revenir à mon court ${dernier}`; } else r.hidden = true;
 }
 
 async function charger() {
