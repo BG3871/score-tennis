@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Organisateur · QR codes</title><link rel="stylesheet" href="style.css?v=2">
+<title>Organisateur · QR codes</title><link rel="stylesheet" href="style.css?v=3">
 <script src="vendor/supabase.js"></script>
 <meta name="robots" content="noindex">
 <script src="vendor/qrcode.js"></script>
@@ -8,11 +8,13 @@
 <div class="noprint">
 <header class="top"><h1>Organisateur</h1><div style="margin-top:6px"><a href="./" style="color:#cfe3d9">Tableau public →</a></div></header>
 <div class="carte saisie" style="margin:0 auto 16px" id="form">Chargement…</div>
+<div class="carte saisie" style="margin:0 auto 16px" id="part" hidden></div>
+<div class="carte saisie" style="margin:0 auto 16px" id="stats" hidden></div>
 </div>
 <div class="qrs" id="qrs"></div>
 </div>
 <script type="module">
-import { sb, esc } from "./common.js?v=2";
+import { sb, esc } from "./common.js?v=3";
 const admin = new URLSearchParams(location.search).get("k") || "";
 const F = document.getElementById("form");
 let R, courts = [];
@@ -23,6 +25,53 @@ async function init() {
   R = r.data; courts = c.data || [];
   form(R.nb_courts);
   enregistrer(false);
+  partenaires(); stats();
+}
+
+// Partenaires affichés en carrousel sur l'écran TV (tv.html)
+function partenaires() {
+  const P = document.getElementById("part"); P.hidden = false;
+  const L = (R.sponsors || []).length ? R.sponsors : [{ nom: "", logo: "", texte: "" }];
+  const ecran = new URL("tv.html", location.href).href;
+  P.innerHTML = `<h3 style="margin:0 0 4px">Écran du club-house et partenaires</h3>
+    <p style="margin:0 0 10px;font-size:.9rem">Ouvrez <a href="${esc(ecran)}" target="_blank"><b>${esc(ecran)}</b></a> en plein écran sur la TV (touche F11). Les partenaires ci-dessous défilent en bas de l'écran.</p>
+    <div id="spl">${L.map(ligneSp).join("")}</div>
+    <button class="btn sec" id="spAdd">+ Ajouter un partenaire</button>
+    <button class="btn" id="spOk">Enregistrer les partenaires</button>
+    <p id="spMsg" style="text-align:center;font-weight:600"></p>`;
+  document.getElementById("spAdd").onclick = () => { document.getElementById("spl").insertAdjacentHTML("beforeend", ligneSp({})); brancher(); };
+  document.getElementById("spOk").onclick = async () => {
+    const liste = [...document.querySelectorAll(".sp-bloc")].map((b) => ({ nom: b.querySelector(".spn").value.trim(), logo: b.querySelector(".spl").value.trim(), texte: b.querySelector(".spt").value.trim() }))
+      .filter((x) => x.nom || x.logo);
+    const m = document.getElementById("spMsg");
+    if (liste.some((x) => x.logo && !/^https:\/\//i.test(x.logo))) { m.textContent = "L'adresse d'un logo doit commencer par https://"; return; }
+    const { error } = await sb.rpc("admin_sponsors", { p_admin: admin, p_sponsors: liste });
+    m.textContent = error ? "Erreur : " + error.message : `${liste.length} partenaire(s) enregistré(s) ✓`;
+    if (!error) R.sponsors = liste;
+  };
+  brancher();
+}
+function ligneSp(s) {
+  return `<div class="sp-bloc" style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px">
+    <div class="sp-ligne"><input class="t spn" placeholder="Nom du partenaire" value="${esc(s.nom)}"><input class="t spl" placeholder="Adresse du logo (https://…)" value="${esc(s.logo)}"><button class="spx" title="Retirer">✕</button></div>
+    <input class="t spt" placeholder="Slogan ou adresse (facultatif)" value="${esc(s.texte)}"></div>`;
+}
+function brancher() { document.querySelectorAll(".spx").forEach((b) => (b.onclick = () => b.closest(".sp-bloc").remove())); }
+
+// Fréquentation : nombre de visites par jour (tableau public, écran TV, saisie)
+async function stats() {
+  const S = document.getElementById("stats");
+  const { data, error } = await sb.rpc("admin_stats", { p_admin: admin });
+  if (error) return;
+  S.hidden = false;
+  const jours = {}, tot = { tableau: 0, widget: 0, tv: 0, saisie: 0 };
+  (data || []).forEach((r) => { (jours[r.jour] ||= { tableau: 0, widget: 0, tv: 0, saisie: 0 })[r.page] = r.n; tot[r.page] += r.n; });
+  const lignes = Object.keys(jours).sort().reverse().slice(0, 20);
+  const fmt = (j) => new Date(j + "T12:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+  S.innerHTML = `<h3 style="margin:0 0 4px">Fréquentation</h3>
+    <p style="margin:0 0 10px;font-size:.9rem">Visites comptées une fois par personne et par visite, sans cookie ni donnée personnelle. Total sur 120 jours : <b>${tot.tableau + tot.widget}</b> visites du tableau (dont ${tot.widget} depuis le site du club).</p>
+    ${lignes.length ? `<table class="stats"><tr><th>Jour</th><th>Tableau</th><th>Site du club</th><th>Écran TV</th><th>Saisie</th></tr>${lignes.map((j) =>
+      `<tr><td>${fmt(j)}</td><td>${jours[j].tableau}</td><td>${jours[j].widget}</td><td>${jours[j].tv}</td><td>${jours[j].saisie}</td></tr>`).join("")}</table>` : "<p>Pas encore de visite enregistrée.</p>"}`;
 }
 
 function form(nb) {

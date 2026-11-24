@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Score en direct · écran</title><link rel="stylesheet" href="style.css?v=3">
+<meta name="robots" content="noindex">
+<script src="vendor/supabase.js"></script>
+<script src="vendor/qrcode.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+</head><body class="tv">
+<header class="tv-tete">
+  <div class="tv-titre" id="titre">Score en direct</div>
+  <div class="tv-equipes"><span class="pill club" id="nClub">Club</span><span class="total" id="tot">0 – 0</span><span class="pill vis" id="nVis">Visiteurs</span></div>
+  <div class="tv-heure" id="heure"></div>
+</header>
+<main class="tv-grille" id="grille"></main>
+<footer class="tv-pied">
+  <div class="tv-sponsors" id="sponsors"></div>
+  <div class="tv-qr"><div id="qr"></div><span>Les scores<br>sur votre<br>téléphone</span></div>
+</footer>
+<div class="tv-etat" id="etat">Connexion…</div>
+<script type="module">
+import { sb, esc, gagnantSet, gagnantMatch } from "./common.js?v=3";
+const $ = (id) => document.getElementById(id);
+let R = { titre: "Score en direct", club: "Club", visiteurs: "Visiteurs", nb_courts: 0, sponsors: [] }, C = {};
+
+// QR code vers le tableau public, pour que le public suive sur son téléphone
+const qr = qrcode(0, "M"); qr.addData(new URL("./", location.href).href); qr.make();
+$("qr").innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+
+function rendu() {
+  $("titre").textContent = R.titre; $("nClub").textContent = R.club; $("nVis").textContent = R.visiteurs;
+  const courts = Object.values(C).filter((c) => c.num <= R.nb_courts).sort((a, b) => a.num - b.num);
+  let tot = [0, 0];
+  $("grille").style.setProperty("--n", courts.length || 1);
+  $("grille").innerHTML = courts.map((c) => {
+    const gm = gagnantMatch(c); if (c.statut === "termine" && gm >= 0) tot[gm]++;
+    const sets = c.sets.filter((s, i) => i < 2 || s[0] + s[1] > 0);
+    const srv = (k) => c.service === k && c.statut === "en_cours" ? ' <span class="balle">🎾</span>' : "";
+    const ligne = (k, cls, nom, joueur) => `<tr><td class="nom"><span class="trait ${cls}"></span>${esc(joueur || nom)}${srv(k)}${gm === k ? ' <span class="vainq">✓</span>' : ""}</td>${
+      sets.map((s, i) => `<td class="j ${gagnantSet(s[0], s[1], i) === k || (gagnantSet(s[0], s[1], i) < 0 && c.statut === "en_cours") ? "g" : ""}">${s[k]}</td>`).join("")}</tr>`;
+    const lib = { attente: "À venir", en_cours: "En cours", termine: "Terminé" }[c.statut];
+    return `<div class="carte"><div class="tete"><b>Court ${c.num}${c.libelle ? " · " + esc(c.libelle) : ""}</b><span class="badge ${c.statut}">${lib}</span></div>
+      <table class="score">${ligne(0, "club", R.club, c.joueur_club)}${ligne(1, "vis", R.visiteurs, c.joueur_vis)}</table></div>`;
+  }).join("");
+  $("tot").textContent = `${tot[0]} – ${tot[1]}`;
+  sponsors();
+}
+
+// Carrousel des partenaires : un partenaire à la fois, change toutes les 8 s
+let spIdx = 0, spCle = "";
+function sponsors() {
+  const L = (R.sponsors || []).filter((s) => s.nom || s.logo);
+  const cle = JSON.stringify(L);
+  if (cle === spCle) return; spCle = cle; spIdx = 0;
+  $("sponsors").innerHTML = L.length ? `<span class="tv-merci">Merci à nos partenaires</span>` + L.map((s, i) =>
+    `<div class="tv-sp${i === 0 ? " on" : ""}">${s.logo ? `<img src="${esc(s.logo)}" alt="${esc(s.nom)}">` : ""}<div><b>${esc(s.nom)}</b>${s.texte ? `<small>${esc(s.texte)}</small>` : ""}</div></div>`).join("") : "";
+}
+setInterval(() => {
+  const el = document.querySelectorAll(".tv-sp"); if (el.length < 2) return;
+  el[spIdx].classList.remove("on"); spIdx = (spIdx + 1) % el.length; el[spIdx].classList.add("on");
+}, 8000);
+
+function heure() { $("heure").textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
+heure(); setInterval(heure, 10000);
+
+async function charger() {
+  const [r, c] = await Promise.all([sb.from("rencontre").select("*").eq("id", 1).single(), sb.from("courts").select("*")]);
+  if (r.error || c.error) { $("etat").textContent = "Connexion difficile, nouvel essai…"; return; }
+  R = r.data; C = {}; c.data.forEach((x) => (C[x.num] = x));
+  rendu(); $("etat").textContent = "";
+}
+sb.channel("tv")
+  .on("postgres_changes", { event: "*", schema: "public", table: "courts" }, (p) => { if (p.new?.num) { C[p.new.num] = p.new; rendu(); } })
+  .on("postgres_changes", { event: "*", schema: "public", table: "rencontre" }, (p) => { if (p.new?.id) { R = p.new; rendu(); } })
+  .subscribe((s) => { if (s === "SUBSCRIBED") charger(); });
+charger();
+setInterval(charger, 30000);
+sb.rpc("compter_visite", { p_page: "tv" }).then(() => {});
+// Un écran reste allumé toute la journée : on recharge la page chaque nuit vers 4 h pour repartir propre
+setInterval(() => { if (new Date().getHours() === 4 && performance.now() > 3600e3) location.reload(); }, 600e3);
+</script></body></html>
