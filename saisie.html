@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Saisie du score</title><link rel="stylesheet" href="style.css?v=2">
+<title>Saisie du score</title><link rel="stylesheet" href="style.css?v=3">
 <script src="vendor/supabase.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
 </head><body><div class="wrap saisie">
@@ -8,7 +8,7 @@
 <div id="app"><div class="carte">Chargement…</div></div>
 </div>
 <script type="module">
-import { sb, esc, setsGagnes } from "./common.js?v=2";
+import { sb, esc, setsGagnes } from "./common.js?v=3";
 const q = new URLSearchParams(location.search);
 const num = parseInt(q.get("c"), 10), cle = q.get("k") || "";
 const app = document.getElementById("app");
@@ -27,6 +27,7 @@ async function init() {
   try { const m = JSON.parse(localStorage.getItem("mesCourts") || "{}"); m[num] = cle; localStorage.setItem("mesCourts", JSON.stringify(m)); localStorage.setItem("dernierCourt", String(num)); } catch (e) {}
   while (court.sets.length < 3) court.sets.push([0, 0]);
   dessiner();
+  try { if (!sessionStorage.getItem("vu" + num)) { sessionStorage.setItem("vu" + num, "1"); sb.rpc("compter_visite", { p_page: "saisie" }).then(() => {}); } } catch (e) {}
   sb.channel("court" + num).on("postgres_changes", { event: "UPDATE", schema: "public", table: "courts", filter: "num=eq." + num }, (p) => {
     // une autre personne saisit sur ce court : on se met à jour si on n'est pas en train d'écrire
     if (!enCours && !envoiTimer && Date.now() - modifLocale > 3000) { court = p.new; while (court.sets.length < 3) court.sets.push([0, 0]); dessiner(); }
